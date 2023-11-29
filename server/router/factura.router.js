@@ -9,4 +9,6 @@ api.patch("/factura/:id", [md_auth.asureAuth], FacturaController.updateFactura)
 api.get("/factura", FacturaController.getFacturas)
 api.delete("/factura/:id", [md_auth.asureAuth], FacturaController.deleteFactura)
 
+api.post('/generarFactura', FacturaController.generarFactura);
+
 module.exports = api

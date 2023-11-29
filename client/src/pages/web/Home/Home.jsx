@@ -1,26 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { InputText } from 'primereact/inputtext';
+
+
 import { BiSearchAlt } from 'react-icons/bi';
 import { MdDelete, MdEdit } from 'react-icons/md';
+import { CiCirclePlus, CiCircleMinus } from 'react-icons/ci';
+import { FaCartPlus } from "react-icons/fa";
+import { IoMdCloseCircle } from "react-icons/io";
 
 import ProductCreateModal from './ProductCreateModal';
 import ProductUpdateModal from './ProductUpdateModal';
-import { CiCirclePlus } from "react-icons/ci";
 
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable'
 
-import './customStyles.css'
+import './customStyles.css';
 
-function Home() {
+const Home = () => {
     const [products, setProducts] = useState([]);
     const [filterCode, setFilterCode] = useState('');
     const [filterName, setFilterName] = useState('');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [cart, setCart] = useState([]);
 
+    const doc = new jsPDF();
 
     const fetchData = async () => {
         try {
@@ -30,6 +38,8 @@ function Home() {
             console.log(error);
         }
     };
+
+    const btnClose = useRef()
 
     useEffect(() => {
         fetchData();
@@ -68,7 +78,7 @@ function Home() {
     const closeUpdateModal = () => {
         setIsUpdateModalOpen(false);
         setSelectedProduct(null);
-        fetchData();  
+        fetchData();
     };
 
     const deleteProduct = async (product) => {
@@ -82,6 +92,42 @@ function Home() {
             }
         }
     };
+
+    const generarFactura = async () => {
+        try {
+            const response = await axios.post('http://localhost:3001/api/v1/generarFactura', {
+                nombre: 'Cliente',
+                vendedor: 'JuanFernando',
+                carrito: cart.map(item => ({ ...item, nombreProduct: item.nombreProduct || 'Nombre Desconocido' })),
+            });
+
+            console.log(cart)
+
+            const newArray = cart.map(item => [
+                item.nombreProduct,
+                item.codigoProduct,
+                item.precioUni,
+                item.proveedor
+            ]);
+            
+
+            autoTable(doc, { html: '#my-table' })
+
+            doc.addImage("../../../assets/jpg/home-banner.jpg", "JPEG", 15, 40, 180, 180);
+            autoTable(doc, {
+                head: [['nombreProduct', 'codigoProduct', 'precioUni', 'proveedor']],
+                body: newArray
+            })
+
+            doc.save('table.pdf')
+
+            console.log(response.data);
+            setCart([]);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
 
     const header = (
         <div className="header">
@@ -103,11 +149,50 @@ function Home() {
                     placeholder="Buscar Por Nombre"
                 />
             </span>
-            
         </div>
     );
 
     const visibleData = filterData(products);
+
+    const addToCart = (product) => {
+        if (!cart.find((item) => item.codigoProduct === product.codigoProduct)) {
+            setCart([...cart, { ...product, cantidad: 1 }]);
+        }
+    };
+
+    const removeFromCart = (product) => {
+        setCart(cart.filter((item) => item.codigoProduct !== product.codigoProduct));
+    };
+
+    const incrementQuantity = (product) => {
+        setCart(
+            cart.map((item) =>
+                item.codigoProduct === product.codigoProduct ? { ...item, cantidad: item.cantidad + 1 } : item
+            )
+        );
+    };
+
+    const decrementQuantity = (product) => {
+        if (product.cantidad > 1) {
+            setCart(
+                cart.map((item) =>
+                    item.codigoProduct === product.codigoProduct ? { ...item, cantidad: item.cantidad - 1 } : item
+                )
+            );
+        }
+    };
+
+    const btnCloseCart = () => {
+        btnClose.current.className = 'cart card_hidden'
+    }
+    const btnOpenCart = () => {
+        btnClose.current.className = 'cart card_visible'
+    }
+
+    const getTotalQuantity = () => cart.reduce((total, item) => total + item.cantidad, 0);
+
+    const getTotalSale = () => cart.reduce((total, item) => total + item.cantidad * item.precioUni, 0);
+
 
     return (
         <>
@@ -115,20 +200,24 @@ function Home() {
             <ProductUpdateModal isOpen={isUpdateModalOpen} onRequestClose={closeUpdateModal} selectedProduct={selectedProduct} />
 
             <section>
-                <div className="card" style={{padding: '0 2em' }}>
-                    <DataTable value={visibleData} header={header} tableStyle={{ minWidth: '60rem', textAlign: 'center', border: '1px solid rgb(154, 154, 154)' }} paginator rows={15} >
+                <FaCartPlus className='btnOpenCart' onClick={btnOpenCart} />
+                <div className="card" style={{ padding: '0 2em' }}>
+                    <DataTable value={visibleData} header={header} tableStyle={{ minWidth: '60rem', textAlign: 'center', border: '1px solid rgb(154, 154, 154)' }} paginator rows={15}>
                         <Column
                             style={{ display: 'flex', justifyContent: 'center', margin: 'auto' }}
                             header="Image"
                             className='column'
                             headerClassName='headerTable'
                             body={(rowData) => (
-                                <img
-                                    alt="Product"
-                                    src={`http://localhost:3001/${rowData.images}`}
-                                    style={{ padding: '.7em 0' }}
-                                    width={'100px'}
-                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <img
+                                        alt="Product"
+                                        src={`http://localhost:3001/${rowData.images}`}
+                                        style={{ padding: '.7em 0' }}
+                                        width={'100px'}
+                                    />
+                                    <FaCartPlus className='btnCardAdd' onClick={() => addToCart(rowData)} />
+                                </div>
                             )}
                         />
                         <Column className='column' field="codigoProduct" header="CodigoProduct" headerClassName='headerTable' />
@@ -158,9 +247,34 @@ function Home() {
                     </DataTable>
                 </div>
                 <button style={{ display: 'flex', alignItems: 'center', gap: '.3em' }} className='btn_create' onClick={openCreateModal}><CiCirclePlus style={{ fontSize: '2em' }} />Producto</button>
+
+                <div className="cart card_hidden" ref={btnClose}>
+                    <h2 style={{ fontSize: '2em', display: 'flex', alignContent: 'center' }}><FaCartPlus style={{ fontSize: '1em' }} />Cart</h2>
+                    <IoMdCloseCircle className='btnCloseCart' onClick={btnCloseCart} />
+                    <ul className='cardUl'>
+                        {cart.map((item) => (
+                            <li className='cartContainer' key={item.codigoProduct}>
+                                <img alt="Product" src={`http://localhost:3001/${item.images}`} style={{ padding: '.7em 0' }} width={'90px'} />
+                                <span style={{ width: '14ch' }}>{item.nombreProduct}</span>
+                                <div>
+                                    <span>Cantidad: {item.cantidad}</span>
+                                    <CiCircleMinus className='btnCardAdd' style={{ fontSize: '2em' }} onClick={() => decrementQuantity(item)} />
+                                    <CiCirclePlus className='btnCardAdd' style={{ fontSize: '2em' }} onClick={() => incrementQuantity(item)} />
+                                </div>
+                                <span>Precio: ${item.precioUni}</span>
+                                <MdDelete className='btnCardAdd' style={{ fontSize: '2em' }} onClick={() => removeFromCart(item)} />
+                            </li>
+                        ))}
+                    </ul>
+                    <div className='cartOptions'>
+                        <span>Total de Productos: {getTotalQuantity()}</span>
+                        <span>Total de Venta: ${getTotalSale()}</span>
+                    </div>
+                    <button className='btnFactura' onClick={generarFactura}>Generar Factura</button>
+                </div>
             </section>
         </>
     );
-}
+};
 
 export default Home;

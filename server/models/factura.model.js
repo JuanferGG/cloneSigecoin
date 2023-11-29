@@ -1,11 +1,12 @@
 const mongoose = require("mongoose")
+const { v4: uuidv4 } = require('uuid');
 
 const FacturaSchema = mongoose.Schema({
     codigoCompra: {
-        type: Number,
-        require: true,
-        unique:true,
-        trim: true,
+        type: String,
+        default: uuidv4,
+        unique: true,
+        required: true,
     },
     //client
     nombre: {
@@ -46,6 +47,7 @@ const FacturaSchema = mongoose.Schema({
     saldo: String,
     estado: Boolean,
     vendedor: String,
+    productos: []
 })
 
 module.exports = mongoose.model('Factura', FacturaSchema)
